@@ -42,13 +42,17 @@ int ConnectToServer( char *pIP, int port = 27015)
 	memset(pRecvBuff, 0, sizeof(pRecvBuff));
 	recvbytes = pSocket->Recv(pRecvBuff, sizeof(pRecvBuff) );
 
-	if( pRecvBuff[0] == 0xFF && pRecvBuff[1] == 0xFF && pRecvBuff[2] == 0xFF && pRecvBuff[3] == 0xFF )
+	if( pRecvBuff[0] == 0xFF && pRecvBuff[1] == 0xFF && pRecvBuff[2] == 0xFF && pRecvBuff[3] == 0xFF && pRecvBuff[4] == 0x42 )
 	{
 		LogPrintf( false, "Good connect to server: %s:%d\n", pIP, port);
 	}
+	else if( pRecvBuff[0] == 0xFF && pRecvBuff[1] == 0xFF && pRecvBuff[2] == 0xFF && pRecvBuff[3] == 0xFF && pRecvBuff[4] == 0x39 )
+	{
+		LogPrintf( false, "Server %s:%d return error: %s\n", pIP, port, (char *)pRecvBuff + 5 );
+	}
 	else
 	{
-
+		LogPrintf( false, "Error connect to server: %s:%d\n", pIP, port );
 	}
 
 	return 1;
