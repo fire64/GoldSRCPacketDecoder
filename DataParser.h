@@ -7,6 +7,7 @@ public:
 	CDataParser( unsigned char *pBuff, int bufflen );
 	~CDataParser(void);
 
+	//Get Data
 	byte GetByte();
 	short GetShort();
 	int GetInt();
@@ -14,9 +15,19 @@ public:
 	long long GetLongLong();
 	char *GetString();
 
+	//SetData
+	void SetByte( byte val );
+	void SetShort( short val );
+	void SetInt( int val );
+	void SetLong( long val );
+	void SetLongLong( long long val );
+	void SetString( char *pVal );
+	void SetData( unsigned char *pVal, int valsize );
+
 	int GetOffset();
 	int MoveOffset(int changeoffs);
 
 	int offset;
+	int buffsize;
 	unsigned char *pBuffLink;
 };
