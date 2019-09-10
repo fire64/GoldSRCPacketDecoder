@@ -70,6 +70,17 @@ char *CDataParser::GetString( )
 	return pVal;
 }
 
+unsigned char *CDataParser::GetFullData()
+{
+	return pBuffLink;
+}
+
+int CDataParser::GetFullSize()
+{
+	return buffsize;
+}
+
+
 int CDataParser::GetOffset()
 {
 	return offset;

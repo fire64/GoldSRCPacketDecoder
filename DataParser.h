@@ -27,6 +27,9 @@ public:
 	int GetOffset();
 	int MoveOffset(int changeoffs);
 
+	unsigned char *CDataParser::GetFullData();
+	int GetFullSize();
+
 	int offset;
 	int buffsize;
 	unsigned char *pBuffLink;

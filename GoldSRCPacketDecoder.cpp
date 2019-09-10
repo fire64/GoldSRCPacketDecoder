@@ -60,17 +60,41 @@ int ConnectToServer( char *pIP, int port = 27015)
 
 //First 8 bytes - header - sequence data and etc
 
-//cl: Header 01 00 00 80 00 00 00 00 Data 2C 7D 6E 02 1A 01-11 41
-//sv: Header 01 00 00 C0 01 00 00 80 Data 5A 18 05 00 1B 00-10 41 5B 52 40 05 49 02 -- many data, all in bz2 stream compressed
+//cl: Header 01 00 00 80 - 00 00 00 00 Data 2C 7D 6E 02 1A 01-11 41
+//sv: Header 01 00 00 C0 - 01 00 00 80 Data 5A 18 05 00 1B 00-10 41 5B 52 40 05 49 02 -- many data, all in bz2 stream compressed
 
-//cl: Header 02 00 00 00 01 00 00 80 Data 59 19 01 03 19 01-11 43
-//cl: Header 03 00 00 00 01 00 00 80 Data 58 19 01 02 18 01-11 42
+//cl: Header 02 00 00 00 - 01 00 00 80 Data 59 19 01 03 19 01-11 43
+//cl: Header 03 00 00 00 - 01 00 00 80 Data 58 19 01 02 18 01-11 42
 
-//sv: Header 02 00 00 C0 03 00 00 80 Data 5A 18 05 03 18 00-10 42 25 81 40 06 12 48 
+//sv: Header 02 00 00 C0 - 03 00 00 80 Data 5A 18 05 03 18 00-10 42 25 81 40 06 12 48 
 
-//cl: Header 04 00 00 00 01 00 00 80 Data 5F 19 01 05 1F 01-11 45
-//cl: Header 05 00 00 00 02 00 00 00 Data 5E 19 01 04 1E 01-11 44 
-//cl: Header 06 00 00 00 02 00 00 00 Data 5D 19 01 07 1D 01-11 47
+//cl: Header 04 00 00 00 - 01 00 00 80 Data 5F 19 01 05 1F 01-11 45
+//cl: Header 05 00 00 00 - 02 00 00 00 Data 5E 19 01 04 1E 01-11 44 
+//cl: Header 06 00 00 00 - 02 00 00 00 Data 5D 19 01 07 1D 01-11 47
+
+int DecodeFunc(unsigned char *data, int size)
+{
+	CDataParser *pDataParser = new CDataParser(data, size);
+
+	unsigned int sequence;
+	unsigned int sequence_ack;
+
+	unsigned int reliable_ack;
+	unsigned int reliable_message;
+
+	bool message_contains_fragments;
+
+	// get sequence numbers
+	sequence = pDataParser->GetLong();
+	sequence_ack = pDataParser->GetLong();
+
+	COM_UnMunge2(pDataParser->GetFullData() + 8, pDataParser->GetFullSize() - 8, sequence & 0xFF);
+
+	reliable_message = sequence >> 31;
+	reliable_ack = sequence_ack >> 31;
+	message_contains_fragments = sequence & (1 << 30) ? true : false;
+}
+
 
 int main(int argc, char* argv[])
 {
