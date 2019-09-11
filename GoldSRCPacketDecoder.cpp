@@ -74,9 +74,15 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 	unsigned int recv_sequence;
 	unsigned int sequence_ack;
 
+	int recvbytes = 0;
+	unsigned char *pDecodeData = NULL;
+	int decodedatasize = 0;
+	int packid = 0;
+
 	//First pack
-	send_sequence = 1;
+	send_sequence = 0x80000001;
 	sequence_ack = 0; //later get from server
+
 
 	//Data parsers
 	CDataParser *pQueryPack = new CDataParser( 8192 );
@@ -115,7 +121,7 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 	pRevData->SetOffset(0);
 
 	//Recv and decode pack from server
-	int recvbytes = pSocket->Recv(pRevData->GetFullData(), pRevData->GetFullSize() );
+	recvbytes = pSocket->Recv(pRevData->GetFullData(), pRevData->GetFullSize() );
 
 	// get sequence numbers
 	recv_sequence = pRevData->GetLong();
@@ -124,11 +130,68 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 	//Decode Data
 	COM_UnMunge2(pRevData->GetCurrentData(), pRevData->GetCurrentSize(), recv_sequence & 0xFF);
 
-	unsigned char *pDecodeData = pRevData->GetCurrentData();
-	int decodedatasize = recvbytes - pRevData->GetOffset();
+	pDecodeData = pRevData->GetCurrentData();
+	decodedatasize = recvbytes - pRevData->GetOffset();
 
 	//Write decode data to file, for manual anais
-	WriteDecodePack( pDecodeData, decodedatasize, 0 );
+	packid++;
+	WriteDecodePack( pDecodeData, decodedatasize, packid );
+
+	//reset
+	send_sequence = 1;
+
+	//PART2
+
+	while(true)
+	{
+		Sleep(1000);
+
+		//ENCODE AND SAND DATA
+		send_sequence++;
+
+		//Reset encode data
+		pEncodeQuery->ClearAllBuf();
+		pEncodeQuery->SetOffset(0);
+
+		//First send new - for new players
+		pEncodeQuery->SetByte( clc_stringcmd );
+		pEncodeQuery->SetString( "say I am bad bot!" );
+		COM_Munge2(pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset(), send_sequence & 0xFF);
+
+		//Reset query data
+		pQueryPack->ClearAllBuf();
+		pQueryPack->SetOffset(0);
+
+		//Add header and data to pack
+		pQueryPack->SetLong( send_sequence );
+		pQueryPack->SetLong( 0 );
+		pQueryPack->SetData( pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset() );
+
+		pSocket->Send( pQueryPack->GetFullData(), pQueryPack->GetOffset() );
+
+		//GET DATA AND DECODE
+
+		//Reset recv buff data
+		pRevData->ClearAllBuf();
+		pRevData->SetOffset(0);
+
+		//Recv and decode pack from server
+		recvbytes = pSocket->Recv(pRevData->GetFullData(), pRevData->GetFullSize() );
+
+		// get sequence numbers
+		recv_sequence = pRevData->GetLong();
+		sequence_ack = pRevData->GetLong();
+
+		//Decode Data
+		COM_UnMunge2(pRevData->GetCurrentData(), pRevData->GetCurrentSize(), recv_sequence & 0xFF);
+
+		pDecodeData = pRevData->GetCurrentData();
+		decodedatasize = recvbytes - pRevData->GetOffset();
+
+		//Write decode data to file, for manual anais
+		packid++;
+		WriteDecodePack( pDecodeData, decodedatasize, packid );
+	}
 
 	return 1;
 }
