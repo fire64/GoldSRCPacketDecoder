@@ -90,7 +90,7 @@ CDataParser *DecodeFunc(unsigned char *data, int size)
 
 	COM_UnMunge2(pDataParser->GetCurrentData(), pDataParser->GetCurrentSize(), sequence & 0xFF);
 
-	//Leter 
+	//Later 
 	reliable_message = sequence >> 31;
 	reliable_ack = sequence_ack >> 31;
 	message_contains_fragments = sequence & (1 << 30) ? true : false;
@@ -98,10 +98,87 @@ CDataParser *DecodeFunc(unsigned char *data, int size)
 	return pDataParser;
 }
 
+int DecodePack( char *pEncodeFileName, char *pDecodefileName )
+{
+	filedata_t pFileEnc = FileRead(pEncodeFileName);
+
+	if(!pFileEnc.filelen)
+	{
+		LogPrintf( false, "Can't open file: %s\n", pEncodeFileName );
+		return 0;
+	}
+
+	CDataParser *pDecBuff = DecodeFunc(pFileEnc.filebuf, pFileEnc.filelen);
+
+	filedata_t pDecFileBuff;
+	pDecFileBuff.filebuf = pDecBuff->GetCurrentData();
+	pDecFileBuff.filelen = pDecBuff->GetCurrentSize();
+
+	int ret = FileWrite( pDecodefileName, pDecFileBuff );
+
+	if(ret)
+	{
+		LogPrintf(false, "File %s successfully decoded\n", pDecodefileName );
+	}
+	else
+	{
+		LogPrintf(false, "File %s can't be writed\n", pDecodefileName );
+	}
+
+	delete pFileEnc.filebuf;
+
+	return 1;
+}
+
+void TestDecodePackets()
+{
+	//Test decode packets
+	DecodePack( "pack/encode/1cl.bin", "pack/decode/1cl-dec.bin" ); //Client send to server: clc_stringcmd byte + string "new" with terminal 0 + clc_nop + clc_nop + clc_nop
+	DecodePack( "pack/encode/2sv.bin", "pack/decode/2sv-dec.bin" ); //server send unk code + size data in bytes + SVC_STUFFTEXT byte + string cl_forwardspeed 320 cl_backspeed 320 cl_sidespeed 320
+	DecodePack( "pack/encode/3cl.bin", "pack/decode/3cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/4sv.bin", "pack/decode/4sv-dec.bin" ); //Server send BZ2 compressed data
+	DecodePack( "pack/encode/5cl.bin", "pack/decode/5cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/6cl.bin", "pack/decode/6cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/7sv.bin", "pack/decode/7sv-dec.bin" ); //server send unk data, may be it is part BZ2 stream
+	DecodePack( "pack/encode/8cl.bin", "pack/decode/8cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/9cl.bin", "pack/decode/9cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/10cl.bin", "pack/decode/10cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/11sv.bin", "pack/decode/11sv-dec.bin" ); //server send unk data, may be it is part BZ2 stream
+	DecodePack( "pack/encode/12cl.bin", "pack/decode/12cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/13cl.bin", "pack/decode/13cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/14sv.bin", "pack/decode/14sv-dec.bin" ); //server send unk data, may be it is part BZ2 stream
+	DecodePack( "pack/encode/15cl.bin", "pack/decode/15cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/16cl.bin", "pack/decode/16cl-dec.bin" ); //client send clc_stringcmd + string "sendres" with terminal 0 
+	DecodePack( "pack/encode/17cl.bin", "pack/decode/17cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/18sv.bin", "pack/decode/18sv-dec.bin" ); //Server send BZ2 compressed data
+	DecodePack( "pack/encode/19cl.bin", "pack/decode/19cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/20cl.bin", "pack/decode/20cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/21sv.bin", "pack/decode/21sv-dec.bin" ); //server send unk data, may be it is part BZ2 stream
+	DecodePack( "pack/encode/22cl.bin", "pack/decode/22cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/23cl.bin", "pack/decode/23cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/24cl.bin", "pack/decode/24cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/25sv.bin", "pack/decode/25sv-dec.bin" ); //server send unk data, may be it is part BZ2 stream
+	DecodePack( "pack/encode/26cl.bin", "pack/decode/26cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/27cl.bin", "pack/decode/27cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/28sv.bin", "pack/decode/28sv-dec.bin" ); //server send unk data, may be it is part BZ2 stream
+	DecodePack( "pack/encode/29cl.bin", "pack/decode/29cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/30cl.bin", "pack/decode/30cl-dec.bin" ); //client send clc_resourcelist byte + 0 + 0 + clc_stringcmd + "spawn 1 1518259236" with terminal 0 (may be 1518259236 its challenge??? )
+	DecodePack( "pack/encode/31sv.bin", "pack/decode/31sv-dec.bin" ); //Server send BZ2 compressed data
+	DecodePack( "pack/encode/32cl.bin", "pack/decode/32cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/33cl.bin", "pack/decode/33cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/34sv.bin", "pack/decode/34sv-dec.bin" ); //server send unk data, may be it is part BZ2 stream
+	DecodePack( "pack/encode/35cl.bin", "pack/decode/35cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/36cl.bin", "pack/decode/36cl-dec.bin" ); //Error less dats
+	DecodePack( "pack/encode/37cl.bin", "pack/decode/37cl-dec.bin" ); //client send clc_stringcmd + string "sendents " with terminal 0 + clc_stringcmd + string "spectate" with terminal 0 + clc_stringcmd + string "VModEnable 1" with terminal 0 + clc_stringcmd + string "vban 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0" with terminal 0
+	DecodePack( "pack/encode/38cl.bin", "pack/decode/38cl-dec.bin" ); //client send many count clc_nop
+	DecodePack( "pack/encode/39sv.bin", "pack/decode/39sv-dec.bin" ); //Unk command with string, not compressed: #Game_connected HLTV Proxy \cl_lw\1\cl_lc\1\*hltv\1\rate\10000\cl_updaterate\20\hspecs\0\hslots\0\hdelay\30\name\HLTV Proxy\*sid\90071996842377216\model\male\topcolor\0\bottomcolor\-10 #Spec_Mode
+	DecodePack( "pack/encode/40sv.bin", "pack/decode/40sv-dec.bin" ); //server send unk data, may be it is part BZ2 stream
+	DecodePack( "pack/encode/41sv.bin", "pack/decode/41sv-dec.bin" ); //server send unk data, may be it is part BZ2 stream
+}
 
 int main(int argc, char* argv[])
 {
-	ConnectToServer( "127.0.0.1", 27015 );
+//	ConnectToServer( "127.0.0.1", 27015 );
 
 	return 1;
 }
