@@ -72,7 +72,7 @@ int ConnectToServer( char *pIP, int port = 27015)
 //cl: Header 05 00 00 00 - 02 00 00 00 Data 5E 19 01 04 1E 01-11 44 
 //cl: Header 06 00 00 00 - 02 00 00 00 Data 5D 19 01 07 1D 01-11 47
 
-int DecodeFunc(unsigned char *data, int size)
+CDataParser *DecodeFunc(unsigned char *data, int size)
 {
 	CDataParser *pDataParser = new CDataParser(data, size);
 
@@ -88,11 +88,14 @@ int DecodeFunc(unsigned char *data, int size)
 	sequence = pDataParser->GetLong();
 	sequence_ack = pDataParser->GetLong();
 
-	COM_UnMunge2(pDataParser->GetFullData() + 8, pDataParser->GetFullSize() - 8, sequence & 0xFF);
+	COM_UnMunge2(pDataParser->GetCurrentData(), pDataParser->GetCurrentSize(), sequence & 0xFF);
 
+	//Leter 
 	reliable_message = sequence >> 31;
 	reliable_ack = sequence_ack >> 31;
 	message_contains_fragments = sequence & (1 << 30) ? true : false;
+
+	return pDataParser;
 }
 
 

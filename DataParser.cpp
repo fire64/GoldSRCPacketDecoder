@@ -80,6 +80,16 @@ int CDataParser::GetFullSize()
 	return buffsize;
 }
 
+unsigned char *CDataParser::GetCurrentData()
+{
+	return pBuffLink + offset;
+}
+
+int CDataParser::GetCurrentSize()
+{
+	return buffsize - offset;
+}
+
 
 int CDataParser::GetOffset()
 {
