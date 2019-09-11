@@ -167,3 +167,4 @@ void CDataParser::SetData( unsigned char *pVal, int valsize )
 	memcpy( pBuffLink + offset, pVal, valsize );
 	offset += valsize;
 }
+

@@ -6,8 +6,6 @@
 #include "Csocket.h"
 #include "DataParser.h"
 
-int srvpack_id = 0;
-
 //First 8 bytes - header - sequence data and etc
 
 //cl: Header 01 00 00 80 - 00 00 00 00 Data 2C 7D 6E 02 1A 01-11 41

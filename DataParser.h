@@ -16,7 +16,7 @@ public:
 	long long GetLongLong();
 	char *GetString();
 
-	//SetData
+	//Set Data
 	void SetByte( byte val );
 	void SetShort( short val );
 	void SetInt( int val );
