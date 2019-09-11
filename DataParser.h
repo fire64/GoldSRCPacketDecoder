@@ -5,6 +5,7 @@ class CDataParser
 public:
 	CDataParser(void);
 	CDataParser( unsigned char *pBuff, int bufflen );
+	CDataParser( int bufflen );
 	~CDataParser(void);
 
 	//Get Data
@@ -25,7 +26,9 @@ public:
 	void SetData( unsigned char *pVal, int valsize );
 
 	int GetOffset();
+	void SetOffset(int val);
 	int MoveOffset(int changeoffs);
+	void ClearAllBuf( );
 
 	//Full data
 	unsigned char *CDataParser::GetFullData();

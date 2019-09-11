@@ -6,57 +6,7 @@
 #include "Csocket.h"
 #include "DataParser.h"
 
-int ConnectToServer( char *pIP, int port = 27015)
-{
-	Csocket *pSocket = new Csocket(eSocketProtocolUDP);
-	pSocket->SetAdr( pIP, port );
-
-	char pQueryPack[4096];
-	memset(pQueryPack, 0, sizeof(pQueryPack) );
-
-	unsigned char pRecvBuff[4096];
-	memset(pRecvBuff, 0, sizeof(pRecvBuff));
-
-	sprintf( pQueryPack, "\xFF\xFF\xFF\xFFgetchallenge\n" );
-	pSocket->Send( (unsigned char *)pQueryPack, strlen(pQueryPack) + 1 );
-
-	int recvbytes = pSocket->Recv(pRecvBuff, sizeof(pRecvBuff) );
-
-	char pChallenge[512];
-	memset(pChallenge, 0, sizeof(pChallenge));
-	strcpy( pChallenge, (char *)pRecvBuff + 14 );
-
-	for(size_t i = 0; i < strlen(pChallenge); i++ )
-	{
-		if(pChallenge[i] == ' ')
-		{
-			pChallenge[i] = NULL;
-			break;
-		}
-	}
-
-	memset(pQueryPack, 0, sizeof(pQueryPack) );
-	sprintf( pQueryPack, "\xFF\xFF\xFF\xFF\connect 48 %s \"\\prot\\2\\unique\\-1\\raw\\861078331b85a424935805ca54f82891\" \"\\name\\HLTV Proxy\\cl_lw\\1\\cl_lc\\1\\*hltv\\1\\rate\\10000\\cl_updaterate\\20\\hspecs\\0\\hslots\\0\\hdelay\\30\"\n", pChallenge );
-	pSocket->Send( (unsigned char *)pQueryPack, strlen(pQueryPack) + 1 );
-
-	memset(pRecvBuff, 0, sizeof(pRecvBuff));
-	recvbytes = pSocket->Recv(pRecvBuff, sizeof(pRecvBuff) );
-
-	if( pRecvBuff[0] == 0xFF && pRecvBuff[1] == 0xFF && pRecvBuff[2] == 0xFF && pRecvBuff[3] == 0xFF && pRecvBuff[4] == 0x42 )
-	{
-		LogPrintf( false, "Good connect to server: %s:%d\n", pIP, port);
-	}
-	else if( pRecvBuff[0] == 0xFF && pRecvBuff[1] == 0xFF && pRecvBuff[2] == 0xFF && pRecvBuff[3] == 0xFF && pRecvBuff[4] == 0x39 )
-	{
-		LogPrintf( false, "Server %s:%d return error: %s\n", pIP, port, (char *)pRecvBuff + 5 );
-	}
-	else
-	{
-		LogPrintf( false, "Error connect to server: %s:%d\n", pIP, port );
-	}
-
-	return 1;
-}
+int srvpack_id = 0;
 
 //First 8 bytes - header - sequence data and etc
 
@@ -96,6 +46,146 @@ CDataParser *DecodeFunc(unsigned char *data, int size)
 	message_contains_fragments = sequence & (1 << 30) ? true : false;
 
 	return pDataParser;
+}
+
+void WriteDecodePack( unsigned char *pDecodeData, int decodedatasize, int packid )
+{
+	filedata_t pDecFileBuff;
+	pDecFileBuff.filebuf = pDecodeData;
+	pDecFileBuff.filelen = decodedatasize;
+
+	char pDecodefileName[512];
+	memset( pDecodefileName, 0, sizeof(pDecodefileName) );
+	sprintf( pDecodefileName, "srvpack_%d.bin", packid );
+
+	int ret = FileWrite( pDecodefileName, pDecFileBuff );
+
+	if(ret)
+	{
+		LogPrintf(false, "File %s successfully decoded\n", pDecodefileName );
+	}
+	else
+	{
+		LogPrintf(false, "File %s can't be writed\n", pDecodefileName );
+	}
+}
+
+int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *pChallenge)
+{
+	unsigned int send_sequence;
+	unsigned int recv_sequence;
+	unsigned int sequence_ack;
+
+	//First pack
+	send_sequence = 1;
+	sequence_ack = 0; //later get from server
+
+	//Data parsers
+	CDataParser *pQueryPack = new CDataParser( 8192 );
+	CDataParser *pEncodeQuery = new CDataParser( 8192 );
+	CDataParser *pRevData = new CDataParser( 8192 );
+
+	//ENCODE AND SAND DATA
+
+	//Reset encode data
+	pEncodeQuery->ClearAllBuf();
+	pEncodeQuery->SetOffset(0);
+
+	//First send new - for new players
+	pEncodeQuery->SetByte( clc_stringcmd );
+	pEncodeQuery->SetString( "new" );
+	pEncodeQuery->SetByte( clc_nop );
+	pEncodeQuery->SetByte( clc_nop );
+	pEncodeQuery->SetByte( clc_nop );
+	COM_Munge2(pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset(), send_sequence & 0xFF);
+
+	//Reset query data
+	pQueryPack->ClearAllBuf();
+	pQueryPack->SetOffset(0);
+
+	//Add header and data to pack
+	pQueryPack->SetLong( send_sequence );
+	pQueryPack->SetLong( sequence_ack );
+	pQueryPack->SetData( pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset() );
+
+	pSocket->Send( pQueryPack->GetFullData(), pQueryPack->GetOffset() );
+
+	//GET DATA AND DECODE
+
+	//Reset recv buff data
+	pRevData->ClearAllBuf();
+	pRevData->SetOffset(0);
+
+	//Recv and decode pack from server
+	int recvbytes = pSocket->Recv(pRevData->GetFullData(), pRevData->GetFullSize() );
+
+	// get sequence numbers
+	recv_sequence = pRevData->GetLong();
+	sequence_ack = pRevData->GetLong();
+
+	//Decode Data
+	COM_UnMunge2(pRevData->GetCurrentData(), pRevData->GetCurrentSize(), recv_sequence & 0xFF);
+
+	unsigned char *pDecodeData = pRevData->GetCurrentData();
+	int decodedatasize = recvbytes - pRevData->GetOffset();
+
+	//Write decode data to file, for manual anais
+	WriteDecodePack( pDecodeData, decodedatasize, 0 );
+
+	return 1;
+}
+
+int ConnectToServer( char *pIP, int port = 27015)
+{
+	Csocket *pSocket = new Csocket(eSocketProtocolUDP);
+	pSocket->SetAdr( pIP, port );
+
+	char pQueryPack[8192];
+	memset(pQueryPack, 0, sizeof(pQueryPack) );
+
+	unsigned char pRecvBuff[8192];
+	memset(pRecvBuff, 0, sizeof(pRecvBuff));
+
+	sprintf( pQueryPack, "\xFF\xFF\xFF\xFFgetchallenge\n" );
+	pSocket->Send( (unsigned char *)pQueryPack, strlen(pQueryPack) + 1 );
+
+	int recvbytes = pSocket->Recv(pRecvBuff, sizeof(pRecvBuff) );
+
+	char pChallenge[512];
+	memset(pChallenge, 0, sizeof(pChallenge));
+	strcpy( pChallenge, (char *)pRecvBuff + 14 );
+
+	for(size_t i = 0; i < strlen(pChallenge); i++ )
+	{
+		if(pChallenge[i] == ' ')
+		{
+			pChallenge[i] = NULL;
+			break;
+		}
+	}
+
+	memset(pQueryPack, 0, sizeof(pQueryPack) );
+	sprintf( pQueryPack, "\xFF\xFF\xFF\xFF\connect 48 %s \"\\prot\\2\\unique\\-1\\raw\\861078331b85a424935805ca54f82891\" \"\\name\\HLTV Proxy\\cl_lw\\1\\cl_lc\\1\\*hltv\\1\\rate\\10000\\cl_updaterate\\20\\hspecs\\0\\hslots\\0\\hdelay\\30\"\n", pChallenge );
+	pSocket->Send( (unsigned char *)pQueryPack, strlen(pQueryPack) + 1 );
+
+	memset(pRecvBuff, 0, sizeof(pRecvBuff));
+	recvbytes = pSocket->Recv(pRecvBuff, sizeof(pRecvBuff) );
+
+	if( pRecvBuff[0] == 0xFF && pRecvBuff[1] == 0xFF && pRecvBuff[2] == 0xFF && pRecvBuff[3] == 0xFF && pRecvBuff[4] == 0x42 )
+	{
+		LogPrintf( false, "Good connect to server: %s:%d\n", pIP, port);
+		StartCommunicationWithServer( pIP, port, pSocket, pChallenge);
+	}
+	else if( pRecvBuff[0] == 0xFF && pRecvBuff[1] == 0xFF && pRecvBuff[2] == 0xFF && pRecvBuff[3] == 0xFF && pRecvBuff[4] == 0x39 )
+	{
+		LogPrintf( false, "Server %s:%d return error: %s\n", pIP, port, (char *)pRecvBuff + 5 );
+	}
+	else
+	{
+		LogPrintf( false, "Error connect to server: %s:%d\n", pIP, port );
+	}
+
+	return 1;
 }
 
 int DecodePack( char *pEncodeFileName, char *pDecodefileName )
@@ -178,7 +268,7 @@ void TestDecodePackets()
 
 int main(int argc, char* argv[])
 {
-//	ConnectToServer( "127.0.0.1", 27015 );
+	ConnectToServer( "127.0.0.1", 27015 );
 
 	return 1;
 }

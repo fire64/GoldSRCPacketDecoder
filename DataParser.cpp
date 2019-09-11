@@ -14,6 +14,18 @@ CDataParser::~CDataParser(void)
 //-----------------------------------------------------------------------------
 // Purpose: Constructor
 //-----------------------------------------------------------------------------
+CDataParser::CDataParser( int bufflen )
+{
+	pBuffLink = (unsigned char *)malloc(bufflen);
+	memset( pBuffLink, 0, bufflen);
+
+	offset = 0;
+	buffsize = bufflen;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Constructor
+//-----------------------------------------------------------------------------
 CDataParser::CDataParser( unsigned char *pBuff, int bufflen )
 {
 	pBuffLink = pBuff;
@@ -96,11 +108,21 @@ int CDataParser::GetOffset()
 	return offset;
 }
 
+void CDataParser::SetOffset(int val)
+{
+	offset = val;
+}
+
 int CDataParser::MoveOffset(int changeoffs)
 {
 	offset += changeoffs;
 
 	return 1;
+}
+
+void CDataParser::ClearAllBuf( )
+{
+	memset( pBuffLink, 0, buffsize);
 }
 
 //Set data
