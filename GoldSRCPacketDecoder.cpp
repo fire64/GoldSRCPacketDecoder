@@ -140,22 +140,91 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 	//reset
 	send_sequence = 1;
 
-	//PART2
+	//PART2 - Spawn
+	Sleep(100);
 
+	//ENCODE AND SAND DATA
+	send_sequence++;
+
+	unsigned int w1, w2;
+	w1 = send_sequence | (0<<30) | (0<<31);
+	w2 = 0 | (0<<31);
+
+	//Reset encode data
+	pEncodeQuery->ClearAllBuf();
+	pEncodeQuery->SetOffset(0);
+
+	//First send new - for new players
+	pEncodeQuery->SetByte( clc_stringcmd );
+
+	char pCmd[512];
+	memset( pCmd, 0, sizeof(pCmd) );
+	sprintf( pCmd, "spawn 1 %s", pChallenge);
+	pEncodeQuery->SetString( pCmd );
+
+	COM_Munge2(pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset(), send_sequence & 0xFF);
+
+	//Reset query data
+	pQueryPack->ClearAllBuf();
+	pQueryPack->SetOffset(0);
+
+	//Add header and data to pack
+	pQueryPack->SetLong( w1 );
+	pQueryPack->SetLong( w2 );
+	pQueryPack->SetData( pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset() );
+
+	pSocket->Send( pQueryPack->GetFullData(), pQueryPack->GetOffset() );
+
+	//GET DATA AND DECODE
+
+	//Reset recv buff data
+	pRevData->ClearAllBuf();
+	pRevData->SetOffset(0);
+
+	//Recv and decode pack from server
+	recvbytes = pSocket->Recv(pRevData->GetFullData(), pRevData->GetFullSize() );
+
+	// get sequence numbers
+	recv_sequence = pRevData->GetLong();
+	sequence_ack = pRevData->GetLong();
+
+	//Decode Data
+	COM_UnMunge2(pRevData->GetCurrentData(), pRevData->GetCurrentSize(), recv_sequence & 0xFF);
+
+	pDecodeData = pRevData->GetCurrentData();
+	decodedatasize = recvbytes - pRevData->GetOffset();
+
+	//Write decode data to file, for manual anais
+	packid++;
+	WriteDecodePack( pDecodeData, decodedatasize, packid );
+
+	int messageid = 0;
+
+	//PART3 - Chat message
 	while(true)
 	{
-		Sleep(1000);
-
+		Sleep(100);
 		//ENCODE AND SAND DATA
 		send_sequence++;
+		messageid++;
+
+		w1 = send_sequence | (0<<30) | (0<<31);
+		w2 = 0 | (0<<31);
 
 		//Reset encode data
 		pEncodeQuery->ClearAllBuf();
 		pEncodeQuery->SetOffset(0);
 
-		//First send new - for new players
+		char pMessage[1024];
+		memset( pMessage, 0, sizeof(pMessage) );
+		sprintf( pMessage, "say Hey. I am a bot. Hello to you from Fire64. This is message number %d", messageid );
+
+		//Send chat message
 		pEncodeQuery->SetByte( clc_stringcmd );
-		pEncodeQuery->SetString( "say I am bad bot!" );
+		pEncodeQuery->SetString( pMessage );
+		pEncodeQuery->SetByte( clc_nop );
+		pEncodeQuery->SetByte( clc_nop );
+		pEncodeQuery->SetByte( clc_nop );
 		COM_Munge2(pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset(), send_sequence & 0xFF);
 
 		//Reset query data
@@ -163,34 +232,10 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 		pQueryPack->SetOffset(0);
 
 		//Add header and data to pack
-		pQueryPack->SetLong( send_sequence );
-		pQueryPack->SetLong( 0 );
+		pQueryPack->SetLong( w1 );
+		pQueryPack->SetLong( w2 );
 		pQueryPack->SetData( pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset() );
-
 		pSocket->Send( pQueryPack->GetFullData(), pQueryPack->GetOffset() );
-
-		//GET DATA AND DECODE
-
-		//Reset recv buff data
-		pRevData->ClearAllBuf();
-		pRevData->SetOffset(0);
-
-		//Recv and decode pack from server
-		recvbytes = pSocket->Recv(pRevData->GetFullData(), pRevData->GetFullSize() );
-
-		// get sequence numbers
-		recv_sequence = pRevData->GetLong();
-		sequence_ack = pRevData->GetLong();
-
-		//Decode Data
-		COM_UnMunge2(pRevData->GetCurrentData(), pRevData->GetCurrentSize(), recv_sequence & 0xFF);
-
-		pDecodeData = pRevData->GetCurrentData();
-		decodedatasize = recvbytes - pRevData->GetOffset();
-
-		//Write decode data to file, for manual anais
-		packid++;
-		WriteDecodePack( pDecodeData, decodedatasize, packid );
 	}
 
 	return 1;
@@ -226,7 +271,7 @@ int ConnectToServer( char *pIP, int port = 27015)
 	}
 
 	memset(pQueryPack, 0, sizeof(pQueryPack) );
-	sprintf( pQueryPack, "\xFF\xFF\xFF\xFF\connect 48 %s \"\\prot\\2\\unique\\-1\\raw\\861078331b85a424935805ca54f82891\" \"\\name\\HLTV Proxy\\cl_lw\\1\\cl_lc\\1\\*hltv\\1\\rate\\10000\\cl_updaterate\\20\\hspecs\\0\\hslots\\0\\hdelay\\30\"\n", pChallenge );
+	sprintf( pQueryPack, "\xFF\xFF\xFF\xFF\connect 48 %s \"\\prot\\2\\unique\\-1\\raw\\861078331b85a424935805ca54f82891\" \"\\name\\Chat bot\\cl_lw\\1\\cl_lc\\1\\*hltv\\1\\rate\\10000\\cl_updaterate\\20\\hspecs\\0\\hslots\\0\\hdelay\\30\"\n", pChallenge );
 	pSocket->Send( (unsigned char *)pQueryPack, strlen(pQueryPack) + 1 );
 
 	memset(pRecvBuff, 0, sizeof(pRecvBuff));
