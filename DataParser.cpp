@@ -1,14 +1,12 @@
 #include "StdAfx.h"
 #include "DataParser.h"
 
-CDataParser::CDataParser(void)
-{
-
-}
-
 CDataParser::~CDataParser(void)
 {
-
+	if(	isAllocated )
+	{
+		free( pBuffLink );
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -21,6 +19,7 @@ CDataParser::CDataParser( int bufflen )
 
 	offset = 0;
 	buffsize = bufflen;
+	isAllocated = true;
 }
 
 //-----------------------------------------------------------------------------
@@ -31,6 +30,7 @@ CDataParser::CDataParser( unsigned char *pBuff, int bufflen )
 	pBuffLink = pBuff;
 	offset = 0;
 	buffsize = bufflen;
+	isAllocated = false;
 }
 
 byte CDataParser::GetByte( )

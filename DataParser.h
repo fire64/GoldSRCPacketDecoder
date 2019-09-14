@@ -3,7 +3,6 @@
 class CDataParser
 {
 public:
-	CDataParser(void);
 	CDataParser( unsigned char *pBuff, int bufflen );
 	CDataParser( int bufflen );
 	~CDataParser(void);
@@ -38,7 +37,9 @@ public:
 	unsigned char *GetCurrentData();
 	int GetCurrentSize();
 
+private:
 	int offset;
 	int buffsize;
 	unsigned char *pBuffLink;
+	bool isAllocated;
 };

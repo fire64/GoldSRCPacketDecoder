@@ -68,6 +68,69 @@ void WriteDecodePack( unsigned char *pDecodeData, int decodedatasize, int packid
 	}
 }
 
+//Clients commands
+//	clc_bad = 0, //0 - only clc_bad byte - error opcode // immediately drop client when received
+//	clc_nop, //1 - only clc_nop byte - nop opcode
+//	clc_move, //2 // [[usercmd_t]
+//	clc_stringcmd, //3 - send clc_stringcmd byte + string command + terminal 0
+//	clc_delta, //4 // [byte] sequence number, requests delta compression of message
+//	clc_resourcelist, //5 string filename + terminal 0 + byte type + short index + long download size + byte flag
+//	clc_tmove, //6
+//	clc_fileconsistency, //7
+//	clc_voicedata, //8
+//	clc_hltv, //9
+//	clc_cvarvalue, //10
+//	clc_cvarvalue2, //11
+//	clc_endoflist = 255, //12
+
+void SendDataPack( Csocket *pSocket, CDataParser *pEncodeQuery, int sequence, int sequence_ack)
+{
+	COM_Munge2(pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset(), sequence & 0xFF);
+
+	//Data parsers
+	CDataParser *pQueryPack = new CDataParser( 8192 );
+
+	//Reset query data
+	pQueryPack->ClearAllBuf();
+	pQueryPack->SetOffset(0);
+
+	//Add header and data to pack
+	pQueryPack->SetLong( sequence );
+	pQueryPack->SetLong( sequence_ack );
+	pQueryPack->SetData( pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset() );
+
+	pSocket->Send( pQueryPack->GetFullData(), pQueryPack->GetOffset() );
+
+	delete pQueryPack;
+}
+
+int RecvDataPack( Csocket *pSocket, CDataParser *pRevData )
+{
+	unsigned int recv_sequence;
+	unsigned int sequence_ack;
+
+	//Reset recv buff data
+	pRevData->ClearAllBuf();
+	pRevData->SetOffset(0);
+
+	//Recv and decode pack from server
+	int recvbytes = pSocket->Recv(pRevData->GetFullData(), pRevData->GetFullSize() );
+
+	if(recvbytes > 8 )
+	{
+		// get sequence numbers
+		recv_sequence = pRevData->GetLong();
+		sequence_ack = pRevData->GetLong();
+
+		//Decode Data
+		COM_UnMunge2(pRevData->GetCurrentData(), pRevData->GetCurrentSize(), recv_sequence & 0xFF);
+
+		pRevData->SetOffset(0);
+	}
+
+	return recvbytes;
+}
+
 int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *pChallenge)
 {
 	unsigned int send_sequence;
@@ -83,13 +146,8 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 	send_sequence = 0x80000001;
 	sequence_ack = 0; //later get from server
 
-
-	//Data parsers
-	CDataParser *pQueryPack = new CDataParser( 8192 );
 	CDataParser *pEncodeQuery = new CDataParser( 8192 );
 	CDataParser *pRevData = new CDataParser( 8192 );
-
-	//ENCODE AND SAND DATA
 
 	//Reset encode data
 	pEncodeQuery->ClearAllBuf();
@@ -101,41 +159,27 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 	pEncodeQuery->SetByte( clc_nop );
 	pEncodeQuery->SetByte( clc_nop );
 	pEncodeQuery->SetByte( clc_nop );
-	COM_Munge2(pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset(), send_sequence & 0xFF);
 
-	//Reset query data
-	pQueryPack->ClearAllBuf();
-	pQueryPack->SetOffset(0);
-
-	//Add header and data to pack
-	pQueryPack->SetLong( send_sequence );
-	pQueryPack->SetLong( sequence_ack );
-	pQueryPack->SetData( pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset() );
-
-	pSocket->Send( pQueryPack->GetFullData(), pQueryPack->GetOffset() );
-
-	//GET DATA AND DECODE
-
-	//Reset recv buff data
-	pRevData->ClearAllBuf();
-	pRevData->SetOffset(0);
+	//Send
+	SendDataPack( pSocket, pEncodeQuery, send_sequence, sequence_ack);
 
 	//Recv and decode pack from server
-	recvbytes = pSocket->Recv(pRevData->GetFullData(), pRevData->GetFullSize() );
+	recvbytes = RecvDataPack( pSocket, pRevData );
 
-	// get sequence numbers
-	recv_sequence = pRevData->GetLong();
-	sequence_ack = pRevData->GetLong();
+	if(recvbytes > 8 )
+	{
+		// get sequence numbers
+		recv_sequence = pRevData->GetLong();
+		sequence_ack = pRevData->GetLong();
 
-	//Decode Data
-	COM_UnMunge2(pRevData->GetCurrentData(), pRevData->GetCurrentSize(), recv_sequence & 0xFF);
+		//Decode Data
+		pDecodeData = pRevData->GetCurrentData();
+		decodedatasize = recvbytes - pRevData->GetOffset();
 
-	pDecodeData = pRevData->GetCurrentData();
-	decodedatasize = recvbytes - pRevData->GetOffset();
-
-	//Write decode data to file, for manual anais
-	packid++;
-	WriteDecodePack( pDecodeData, decodedatasize, packid );
+		//Write decode data to file, for manual anais
+		packid++;
+		WriteDecodePack( pDecodeData, decodedatasize, packid );
+	}
 
 	//reset
 	send_sequence = 1;
@@ -143,7 +187,7 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 	//PART2 - Spawn
 	Sleep(100);
 
-	//ENCODE AND SAND DATA
+	//ENCODE AND SEND DATA
 	send_sequence++;
 
 	unsigned int w1, w2;
@@ -162,49 +206,38 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 	sprintf( pCmd, "spawn 1 %s", pChallenge);
 	pEncodeQuery->SetString( pCmd );
 
-	COM_Munge2(pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset(), send_sequence & 0xFF);
-
-	//Reset query data
-	pQueryPack->ClearAllBuf();
-	pQueryPack->SetOffset(0);
-
-	//Add header and data to pack
-	pQueryPack->SetLong( w1 );
-	pQueryPack->SetLong( w2 );
-	pQueryPack->SetData( pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset() );
-
-	pSocket->Send( pQueryPack->GetFullData(), pQueryPack->GetOffset() );
-
-	//GET DATA AND DECODE
+	//Send
+	SendDataPack( pSocket, pEncodeQuery, 0, 0); //I don't know why it doesn't work otherwise
 
 	//Reset recv buff data
 	pRevData->ClearAllBuf();
 	pRevData->SetOffset(0);
 
 	//Recv and decode pack from server
-	recvbytes = pSocket->Recv(pRevData->GetFullData(), pRevData->GetFullSize() );
+	recvbytes = RecvDataPack( pSocket, pRevData );
 
-	// get sequence numbers
-	recv_sequence = pRevData->GetLong();
-	sequence_ack = pRevData->GetLong();
+	if(recvbytes > 8 )
+	{
+		// get sequence numbers
+		recv_sequence = pRevData->GetLong();
+		sequence_ack = pRevData->GetLong();
 
-	//Decode Data
-	COM_UnMunge2(pRevData->GetCurrentData(), pRevData->GetCurrentSize(), recv_sequence & 0xFF);
+		//Decode Data
+		pDecodeData = pRevData->GetCurrentData();
+		decodedatasize = recvbytes - pRevData->GetOffset();
 
-	pDecodeData = pRevData->GetCurrentData();
-	decodedatasize = recvbytes - pRevData->GetOffset();
-
-	//Write decode data to file, for manual anais
-	packid++;
-	WriteDecodePack( pDecodeData, decodedatasize, packid );
+		//Write decode data to file, for manual anais
+		packid++;
+		WriteDecodePack( pDecodeData, decodedatasize, packid );
+	}
 
 	int messageid = 0;
 
 	//PART3 - Chat message
 	while(true)
 	{
-		Sleep(100);
-		//ENCODE AND SAND DATA
+		Sleep(1000);
+		//ENCODE AND SEND DATA
 		send_sequence++;
 		messageid++;
 
@@ -220,22 +253,34 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 		sprintf( pMessage, "say Hey. I am a bot. Hello to you from Fire64. This is message number %d", messageid );
 
 		//Send chat message
+		pEncodeQuery->SetByte( clc_nop );
 		pEncodeQuery->SetByte( clc_stringcmd );
 		pEncodeQuery->SetString( pMessage );
 		pEncodeQuery->SetByte( clc_nop );
-		pEncodeQuery->SetByte( clc_nop );
-		pEncodeQuery->SetByte( clc_nop );
-		COM_Munge2(pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset(), send_sequence & 0xFF);
 
-		//Reset query data
-		pQueryPack->ClearAllBuf();
-		pQueryPack->SetOffset(0);
+		SendDataPack( pSocket, pEncodeQuery, w1, w2);
 
-		//Add header and data to pack
-		pQueryPack->SetLong( w1 );
-		pQueryPack->SetLong( w2 );
-		pQueryPack->SetData( pEncodeQuery->GetFullData(), pEncodeQuery->GetOffset() );
-		pSocket->Send( pQueryPack->GetFullData(), pQueryPack->GetOffset() );
+		//Reset recv buff data
+		pRevData->ClearAllBuf();
+		pRevData->SetOffset(0);
+
+		//Recv and decode pack from server
+		recvbytes = RecvDataPack( pSocket, pRevData );
+
+		if(recvbytes > 8 )
+		{
+			// get sequence numbers
+			recv_sequence = pRevData->GetLong();
+			sequence_ack = pRevData->GetLong();
+
+			//Decode Data
+			pDecodeData = pRevData->GetCurrentData();
+			decodedatasize = recvbytes - pRevData->GetOffset();
+
+			//Write decode data to file, for manual anais
+			packid++;
+			WriteDecodePack( pDecodeData, decodedatasize, packid );
+		}
 	}
 
 	return 1;
@@ -245,6 +290,7 @@ int ConnectToServer( char *pIP, int port = 27015)
 {
 	Csocket *pSocket = new Csocket(eSocketProtocolUDP);
 	pSocket->SetAdr( pIP, port );
+	pSocket->SetTimeOut( 500000 );
 
 	char pQueryPack[8192];
 	memset(pQueryPack, 0, sizeof(pQueryPack) );
