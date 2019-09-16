@@ -46,7 +46,6 @@ struct serverinfo_t
 	long long gameid;
 };
 
-
 //First 8 bytes - header - sequence data and etc
 
 //cl: Header 01 00 00 80 - 00 00 00 00 Data 2C 7D 6E 02 1A 01-11 41
