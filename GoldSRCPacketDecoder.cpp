@@ -699,15 +699,19 @@ int AddServerToMasterServer( Csocket *pSocket, serverinfo_t *pServerInfo )
 	return 1;
 }
 
-int StartCommunicationWithClient( Csocket *pSocket, CDataParser *pRevData, int recvbytes )
+int StartCommunicationWithClient( Csocket *pSocket, CDataParser *pRevData, serverinfo_t *pServerInfo, int recvbytes )
 {
 	unsigned int send_sequence = 0;
 	unsigned int recv_sequence = 0;
 	unsigned int sequence_ack = 0;
+	
+	unsigned int w1, w2;
+
+	CDataParser *pEncodeQuery = new CDataParser( 8192 );
 
 	int packid = 0;
 
-	if(recvbytes > 8 )
+	if(recvbytes > 7 )
 	{
 		// get sequence numbers
 		recv_sequence = pRevData->GetLong();
@@ -717,14 +721,63 @@ int StartCommunicationWithClient( Csocket *pSocket, CDataParser *pRevData, int r
 		COM_UnMunge2(pRevData->GetCurrentData(), pRevData->GetCurrentSize(), recv_sequence & 0xFF);
 
 		pRevData->SetOffset(0);
-
-		//Write decode data to file, for manual anais
-		packid++;
-		WriteDecodePack( pRevData->GetFullData(), recvbytes, packid );
 	}
 	else
 	{
 		return 0;
+	}
+
+	//ENCODE AND SEND DATA
+	send_sequence++;
+	w1 = send_sequence | (0<<30) | (0<<31);
+	w2 = 0 | (0<<31);
+
+	//Reset encode data
+	pEncodeQuery->ClearAllBuf();
+	pEncodeQuery->SetOffset(0);
+
+	//Send protocol version
+	pEncodeQuery->SetByte( svc_version );
+	pEncodeQuery->SetLong( pServerInfo->protocol );
+
+	pEncodeQuery->SetByte( svc_time );
+	pEncodeQuery->SetFloat( 1 );
+
+	//Send message to console
+	pEncodeQuery->SetByte( svc_print );
+	pEncodeQuery->SetString( "I'm not server :)\n" );
+
+	pEncodeQuery->SetByte( svc_signonnum );
+	pEncodeQuery->SetByte( 1 );
+
+	//Send command to client
+	pEncodeQuery->SetByte( svc_stufftext );
+	pEncodeQuery->SetString( "echo test\n" );
+
+/*
+	//Message error
+	pEncodeQuery->SetByte( svc_bad );
+*/
+
+	//Send disconnect command
+	pEncodeQuery->SetByte( svc_disconnect );
+	pEncodeQuery->SetString( "I'm not server :)\n" );
+
+	//Send
+	SendDataPack( pSocket, pEncodeQuery, send_sequence, sequence_ack); //I don't know why it doesn't work otherwise
+
+	//Reset recv buff data
+	pRevData->ClearAllBuf();
+	pRevData->SetOffset(0);
+
+	//Recv and decode pack from server
+	recvbytes = RecvDataPack( pSocket, pRevData );
+
+	if(recvbytes > 8 )
+	{
+		// get sequence numbers
+		recv_sequence = pRevData->GetLong();
+		sequence_ack = pRevData->GetLong();
 	}
 
 	return 1;
@@ -826,7 +879,7 @@ int EmulationServer( int port )
 			else
 			{
 				pRevData->SetOffset(0);
-				StartCommunicationWithClient( pSocket, pRevData, recvbytes );
+				StartCommunicationWithClient( pSocket, pRevData, &pServerInfo, recvbytes );
 			}
 		}
 	}
