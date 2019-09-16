@@ -64,6 +64,14 @@ long CDataParser::GetLong( )
 	return val;
 }
 
+float CDataParser::GetFloat( )
+{
+	float val = (float)((float*)(pBuffLink + offset))[0];
+	offset += sizeof(float);
+
+	return val;
+}
+
 long long CDataParser::GetLongLong( )
 {
 	long long val = (long long)((long long*)(pBuffLink + offset))[0];
@@ -148,6 +156,12 @@ void CDataParser::SetLong( long val )
 {
 	(long)((long*)(pBuffLink + offset))[0] = val;
 	offset += sizeof(long);
+}
+
+void CDataParser::SetFloat( float val )
+{
+	(float)((float*)(pBuffLink + offset))[0] = val;
+	offset += sizeof(float);
 }
 
 void CDataParser::SetLongLong( long long val )

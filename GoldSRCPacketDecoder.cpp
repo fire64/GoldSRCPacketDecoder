@@ -116,7 +116,7 @@ void WriteDecodePack( unsigned char *pDecodeData, int decodedatasize, int packid
 
 	char pDecodefileName[512];
 	memset( pDecodefileName, 0, sizeof(pDecodefileName) );
-	sprintf( pDecodefileName, "srvpack_%d.bin", packid );
+	sprintf( pDecodefileName, "pack_%d.bin", packid );
 
 	int ret = FileWrite( pDecodefileName, pDecFileBuff );
 
@@ -479,8 +479,6 @@ int DecodePack( char *pEncodeFileName, char *pDecodefileName )
 	return 1;
 }
 
-
-
 void TestDecodePackets()
 {
 	//Test decode packets
@@ -527,6 +525,130 @@ void TestDecodePackets()
 	DecodePack( "pack/encode/41sv.bin", "pack/decode/41sv-dec.bin" ); //server send unk data, may be it is part BZ2 stream
 }
 
+int SendInfoAboutServer( Csocket *pSocket, serverinfo_t *pServerInfo )
+{
+	CDataParser *pQuery = new CDataParser( 8192 );
+
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0x49 );
+
+	pQuery->SetByte( pServerInfo->protocol );
+	pQuery->SetString( pServerInfo->pHostName );
+	pQuery->SetString( pServerInfo->pMapName );
+	pQuery->SetString( pServerInfo->pGameDir );
+	pQuery->SetString( pServerInfo->pGameName );
+
+	pQuery->SetShort( pServerInfo->appid );
+	pQuery->SetByte( pServerInfo->curpl );
+	pQuery->SetByte( pServerInfo->maxplayers );
+	pQuery->SetByte( pServerInfo->bots );
+
+	pQuery->SetByte( pServerInfo->type );
+	pQuery->SetByte( pServerInfo->os );
+	pQuery->SetByte( pServerInfo->password );
+	pQuery->SetByte( pServerInfo->secure );
+
+	pQuery->SetString( pServerInfo->pVersion );
+
+	pSocket->Send( pQuery->GetFullData(), pQuery->GetOffset() );
+
+	delete pQuery;
+
+	return 1;
+}
+
+int SendChallengeForSteam( Csocket *pSocket )
+{
+	CDataParser *pQuery = new CDataParser( 8192 );
+
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0x41 );
+	pQuery->SetString( "00000000 466639471 3 90127494217252875m 1" );
+	pSocket->Send( pQuery->GetFullData(), pQuery->GetOffset() );
+
+	delete pQuery;
+
+	return 1;
+}
+
+int SendChallengeForValve( Csocket *pSocket )
+{
+	return 1;
+}
+
+int SendConnectionApproval( Csocket *pSocket )
+{
+	CDataParser *pQuery = new CDataParser( 8192 );
+
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0x42 );
+	pQuery->SetString( " 984 \"128.72.231.11:27005\" 1 7882" );
+
+	pSocket->Send( pQuery->GetFullData(), pQuery->GetOffset() );
+
+	delete pQuery;
+
+	return 1;
+}
+
+int SendPlayersListChallenge( Csocket *pSocket )
+{
+	CDataParser *pQuery = new CDataParser( 8192 );
+
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0x41 );
+	pQuery->SetLong( 123456 );
+
+	pSocket->Send( pQuery->GetFullData(), pQuery->GetOffset() );
+
+	delete pQuery;
+
+	return 1;
+}
+
+int SendPlayersList( Csocket *pSocket, serverinfo_t *pServerInfo )
+{
+	CDataParser *pQuery = new CDataParser( 8192 );
+
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0xFF );
+	pQuery->SetByte( 0x44 );
+
+	pQuery->SetByte( pServerInfo->curpl );
+
+	for( int i = 0; i < pServerInfo->curpl; i++ )
+	{
+		char pPlayerName[256];
+		memset( pPlayerName, 0, sizeof(pPlayerName) );
+		sprintf( pPlayerName, "player %d", i );
+
+		pQuery->SetByte( i ); //player id
+		pQuery->SetString( pPlayerName ); //player name
+		pQuery->SetLong( i * 2 ); //score
+		pQuery->SetFloat( 60.0f * i ); //score
+	}
+
+	pSocket->Send( pQuery->GetFullData(), pQuery->GetOffset() );
+
+	delete pQuery;
+
+	return 1;
+}
+
 int AddServerToMasterServer( Csocket *pSocket, serverinfo_t *pServerInfo )
 {
 	pSocket->SetAdr( "hl2master.steampowered.com", 27011 );
@@ -539,8 +661,6 @@ int AddServerToMasterServer( Csocket *pSocket, serverinfo_t *pServerInfo )
 	pQuery->SetOffset(0);
 
 	pQuery->SetByte( 0x71 );
-//	pQuery->SetByte( 0xFF );
-//	pQuery->SetByte( 0x00 );
 	pSocket->Send( pQuery->GetFullData(), pQuery->GetOffset() );
 
 	//Reset recv data
@@ -559,7 +679,6 @@ int AddServerToMasterServer( Csocket *pSocket, serverinfo_t *pServerInfo )
 
 		pSocket->Send( (unsigned char *)pMasterQuery, strlen(pMasterQuery) );
 
-
 		//Reset recv data
 		pRevData->ClearAllBuf();
 		pRevData->SetOffset(0);
@@ -574,6 +693,37 @@ int AddServerToMasterServer( Csocket *pSocket, serverinfo_t *pServerInfo )
 	{
 		delete pQuery;
 		delete pRevData;
+		return 0;
+	}
+
+	return 1;
+}
+
+int StartCommunicationWithClient( Csocket *pSocket, CDataParser *pRevData, int recvbytes )
+{
+	unsigned int send_sequence = 0;
+	unsigned int recv_sequence = 0;
+	unsigned int sequence_ack = 0;
+
+	int packid = 0;
+
+	if(recvbytes > 8 )
+	{
+		// get sequence numbers
+		recv_sequence = pRevData->GetLong();
+		sequence_ack = pRevData->GetLong();
+
+		//Decode Data
+		COM_UnMunge2(pRevData->GetCurrentData(), pRevData->GetCurrentSize(), recv_sequence & 0xFF);
+
+		pRevData->SetOffset(0);
+
+		//Write decode data to file, for manual anais
+		packid++;
+		WriteDecodePack( pRevData->GetFullData(), recvbytes, packid );
+	}
+	else
+	{
 		return 0;
 	}
 
@@ -597,7 +747,6 @@ int EmulationServer( int port )
 	strcpy( pServerInfo.pGameDir, "ricochet" );
 	strcpy( pServerInfo.pGameName, "Ricochet CTF" );
 	pServerInfo.appid = 60;
-
 
 	pServerInfo.curpl = 3;
 	pServerInfo.maxplayers = 12;
@@ -626,10 +775,61 @@ int EmulationServer( int port )
 
 		if(recvbytes > 4 )
 		{
-			LogPrintf(false, "Get packet\n" );
+			if( pRevData->GetByte() == 0xFF && pRevData->GetByte() == 0xFF && pRevData->GetByte() == 0xFF && pRevData->GetByte() == 0xFF )
+			{
+				byte opcode = pRevData->GetByte();
+
+				if( opcode == 0x54 && strstr( pRevData->GetString(), "Source Engine Query" ) ) //'T' - Source Engine Query
+				{
+					SendInfoAboutServer( pSocket, &pServerInfo );
+				}
+				else if( opcode == 0x55) //'U' - Get users list
+				{
+					long challenge = pRevData->GetLong();
+
+					if( challenge == 0xFFFFFFFF || challenge == 0 ) //if get challenge for get players list
+					{
+						SendPlayersListChallenge( pSocket);
+					}
+					else
+					{
+						SendPlayersList( pSocket, &pServerInfo );
+					}
+				}
+				else if( opcode == 0x67) //'g' - Get challenge ???
+				{
+					pRevData->SetOffset(4); //return to start data
+
+					char *pCommand = pRevData->GetString();
+
+					if( strcmp( "getchallenge steam\n", pCommand ) == 0 )
+					{
+						SendChallengeForSteam(pSocket);
+					}
+					else if( strcmp( "getchallenge valve\n", pCommand ) == 0 )
+					{
+						SendChallengeForValve(pSocket);
+					}
+				}
+				else if( opcode == 0x63) //'c' - Connect ???
+				{
+					pRevData->SetOffset(4); //return to start data
+
+					char *pCommand = pRevData->GetString();
+
+					if( strstr( pCommand, "connect" ) )
+					{
+						SendConnectionApproval(pSocket);
+					}
+				}
+			}
+			else
+			{
+				pRevData->SetOffset(0);
+				StartCommunicationWithClient( pSocket, pRevData, recvbytes );
+			}
 		}
 	}
-
 
 	return 1;
 }
@@ -638,15 +838,7 @@ int main(int argc, char* argv[])
 {
 //	ConnectToServer( "127.0.0.1", 27015 );
 
-
 	EmulationServer( 27015 );
-
-
-
-
-
-
-
 
 	return 1;
 }

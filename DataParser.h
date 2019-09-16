@@ -12,6 +12,7 @@ public:
 	short GetShort();
 	int GetInt();
 	long GetLong();
+	float GetFloat( );
 	long long GetLongLong();
 	char *GetString();
 
@@ -20,6 +21,7 @@ public:
 	void SetShort( short val );
 	void SetInt( int val );
 	void SetLong( long val );
+	void SetFloat( float val );
 	void SetLongLong( long long val );
 	void SetString( char *pVal );
 	void SetData( unsigned char *pVal, int valsize );
