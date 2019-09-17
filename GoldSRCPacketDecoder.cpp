@@ -7,6 +7,8 @@
 #include "DataParser.h"
 #include "bzlib.h"
 
+int packid = 0;
+
 struct serverinfo_t
 {
 	int  serverport;
@@ -108,7 +110,7 @@ CDataParser *DecodeFunc(unsigned char *data, int size)
 	return pDataParser;
 }
 
-void WriteDecodePack( unsigned char *pDecodeData, int decodedatasize, int packid )
+void WriteDecodePack( unsigned char *pDecodeData, int decodedatasize, int packidcur )
 {
 	filedata_t pDecFileBuff;
 	pDecFileBuff.filebuf = pDecodeData;
@@ -116,7 +118,7 @@ void WriteDecodePack( unsigned char *pDecodeData, int decodedatasize, int packid
 
 	char pDecodefileName[512];
 	memset( pDecodefileName, 0, sizeof(pDecodefileName) );
-	sprintf( pDecodefileName, "pack_%d.bin", packid );
+	sprintf( pDecodefileName, "pack_%d.bin", packidcur );
 
 	int ret = FileWrite( pDecodefileName, pDecFileBuff );
 
@@ -178,7 +180,7 @@ int RecvDataPack( Csocket *pSocket, CDataParser *pRevData )
 	//Recv and decode pack from server
 	int recvbytes = pSocket->Recv(pRevData->GetFullData(), pRevData->GetFullSize() );
 
-	if(recvbytes > 8 )
+	if(recvbytes >= 8 )
 	{
 		// get sequence numbers
 		recv_sequence = pRevData->GetLong();
@@ -226,9 +228,6 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 	unsigned int sequence_ack = 0;
 
 	int recvbytes = 0;
-	unsigned char *pDecodeData = NULL;
-	int decodedatasize = 0;
-	int packid = 0;
 
 	//First pack
 	send_sequence = 0x80000001;
@@ -257,19 +256,15 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 
 	recvbytes = RecvDataPack( pSocket, pRevData );
 
-	if(recvbytes > 8 )
+	if(recvbytes >= 8 )
 	{
 		// get sequence numbers
 		recv_sequence = pRevData->GetLong();
 		sequence_ack = pRevData->GetLong();
 
-		//Decode Data
-		pDecodeData = pRevData->GetCurrentData();
-		decodedatasize = recvbytes - pRevData->GetOffset();
-
 		//Write decode data to file, for manual anais
 		packid++;
-		WriteDecodePack( pRevData->GetFullData(), pRevData->GetFullSize(), packid );
+		WriteDecodePack( pRevData->GetFullData(), recvbytes, packid );
 	}
 
 	//reset
@@ -281,19 +276,15 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 
 	recvbytes = SendEmptyNopAndGetData( pSocket, send_sequence, sequence_ack, pRevData );
 
-	if(recvbytes > 8 )
+	if(recvbytes >= 8 )
 	{
 		// get sequence numbers
 		recv_sequence = pRevData->GetLong();
 		sequence_ack = pRevData->GetLong();
 
-		//Decode Data
-		pDecodeData = pRevData->GetCurrentData();
-		decodedatasize = recvbytes - pRevData->GetOffset();
-
 		//Write decode data to file, for manual anais
 		packid++;
-		WriteDecodePack( pRevData->GetFullData(), pRevData->GetFullSize(), packid );
+		WriteDecodePack( pRevData->GetFullData(), recvbytes, packid );
 	}
 
 	//PART2 - Spawn
@@ -332,7 +323,7 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 	//Recv and decode pack from server
 	recvbytes = RecvDataPack( pSocket, pRevData );
 
-	if(recvbytes > 8 )
+	if(recvbytes >= 8 )
 	{
 		// get sequence numbers
 		recv_sequence = pRevData->GetLong();
@@ -340,7 +331,7 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 
 		//Write decode data to file, for manual anais
 		packid++;
-		WriteDecodePack( pRevData->GetFullData(), pRevData->GetFullSize(), packid );
+		WriteDecodePack( pRevData->GetFullData(), recvbytes, packid );
 	}
 
 	int messageid = 0;
@@ -379,14 +370,14 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 		//Recv and decode pack from server
 		recvbytes = RecvDataPack( pSocket, pRevData );
 
-		if(recvbytes > 8 )
+		if(recvbytes >= 8 )
 		{
 			// get sequence numbers
 			recv_sequence = pRevData->GetLong();
 			sequence_ack = pRevData->GetLong();
 
 			packid++;
-			WriteDecodePack( pRevData->GetFullData(), pRevData->GetFullSize(), packid );
+			WriteDecodePack( pRevData->GetFullData(), recvbytes, packid );
 		}
 	}
 
@@ -709,9 +700,7 @@ int StartCommunicationWithClient( Csocket *pSocket, CDataParser *pRevData, serve
 
 	CDataParser *pEncodeQuery = new CDataParser( 8192 );
 
-	int packid = 0;
-
-	if(recvbytes > 7 )
+	if(recvbytes >= 8 )
 	{
 		// get sequence numbers
 		recv_sequence = pRevData->GetLong();
@@ -721,6 +710,11 @@ int StartCommunicationWithClient( Csocket *pSocket, CDataParser *pRevData, serve
 		COM_UnMunge2(pRevData->GetCurrentData(), pRevData->GetCurrentSize(), recv_sequence & 0xFF);
 
 		pRevData->SetOffset(0);
+
+		//Write decode data to file, for manual anais
+		packid++;
+		WriteDecodePack( pRevData->GetFullData(), recvbytes, packid );
+
 	}
 	else
 	{
@@ -773,11 +767,15 @@ int StartCommunicationWithClient( Csocket *pSocket, CDataParser *pRevData, serve
 	//Recv and decode pack from server
 	recvbytes = RecvDataPack( pSocket, pRevData );
 
-	if(recvbytes > 8 )
+	if(recvbytes >= 8 )
 	{
 		// get sequence numbers
 		recv_sequence = pRevData->GetLong();
 		sequence_ack = pRevData->GetLong();
+
+		//Write decode data to file, for manual anais
+		packid++;
+		WriteDecodePack( pRevData->GetFullData(), recvbytes, packid );
 	}
 
 	return 1;
