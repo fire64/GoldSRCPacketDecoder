@@ -294,8 +294,8 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 	send_sequence++;
 
 	unsigned int w1, w2;
-	w1 = send_sequence | (0<<30) | (0<<31);
-	w2 = 0 | (0<<31);
+	w1 = send_sequence; // | (0<<30) | (0<<31);
+	w2 = sequence_ack; // 0 | (0<<31);
 
 	//Reset encode data
 	pEncodeQuery->ClearAllBuf();
@@ -314,7 +314,7 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 	pEncodeQuery->SetString( pCmd );
 
 	//Send
-	SendDataPack( pSocket, pEncodeQuery, send_sequence, sequence_ack); //I don't know why it doesn't work otherwise
+	SendDataPack( pSocket, pEncodeQuery, 0, sequence_ack); //I don't know why it doesn't work otherwise
 
 	//Reset recv buff data
 	pRevData->ClearAllBuf();
@@ -322,6 +322,70 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 
 	//Recv and decode pack from server
 	recvbytes = RecvDataPack( pSocket, pRevData );
+
+	if(recvbytes >= 8 )
+	{
+		// get sequence numbers
+		recv_sequence = pRevData->GetLong();
+		sequence_ack = pRevData->GetLong();
+
+		//Write decode data to file, for manual anais
+		packid++;
+		WriteDecodePack( pRevData->GetFullData(), recvbytes, packid );
+	}
+
+
+	recvbytes = SendEmptyNopAndGetData( pSocket, send_sequence, sequence_ack, pRevData );
+
+	if(recvbytes >= 8 )
+	{
+		// get sequence numbers
+		recv_sequence = pRevData->GetLong();
+		sequence_ack = pRevData->GetLong();
+
+		//Write decode data to file, for manual anais
+		packid++;
+		WriteDecodePack( pRevData->GetFullData(), recvbytes, packid );
+	}
+
+
+	send_sequence++;
+
+	w1 = send_sequence; // | (0<<30) | (0<<31);
+	w2 = sequence_ack; // 0 | (0<<31);
+
+	//Reset encode data
+	pEncodeQuery->ClearAllBuf();
+	pEncodeQuery->SetOffset(0);
+
+	//Send joint command
+	pEncodeQuery->SetByte( clc_nop );
+	pEncodeQuery->SetByte( clc_stringcmd );
+	pEncodeQuery->SetString( "jointeam 1" );
+	pEncodeQuery->SetByte( clc_stringcmd );
+	pEncodeQuery->SetString( "joinclass 1" );
+	pEncodeQuery->SetByte( clc_nop );
+
+	SendDataPack( pSocket, pEncodeQuery, w1, w2);
+
+	//Reset recv buff data
+	pRevData->ClearAllBuf();
+	pRevData->SetOffset(0);
+
+	//Recv and decode pack from server
+	recvbytes = RecvDataPack( pSocket, pRevData );
+
+	if(recvbytes >= 8 )
+	{
+		// get sequence numbers
+		recv_sequence = pRevData->GetLong();
+		sequence_ack = pRevData->GetLong();
+
+		packid++;
+		WriteDecodePack( pRevData->GetFullData(), recvbytes, packid );
+	}
+
+	recvbytes = SendEmptyNopAndGetData( pSocket, send_sequence, sequence_ack, pRevData );
 
 	if(recvbytes >= 8 )
 	{
@@ -344,8 +408,8 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 		send_sequence++;
 		messageid++;
 
-		w1 = send_sequence | (0<<30) | (0<<31);
-		w2 = 0 | (0<<31);
+		w1 = send_sequence; // | (0<<30) | (0<<31);
+		w2 = sequence_ack; // 0 | (0<<31);
 
 		//Reset encode data
 		pEncodeQuery->ClearAllBuf();
@@ -379,6 +443,22 @@ int StartCommunicationWithServer( char *pIP, int port, Csocket *pSocket, char *p
 			packid++;
 			WriteDecodePack( pRevData->GetFullData(), recvbytes, packid );
 		}
+
+
+	recvbytes = SendEmptyNopAndGetData( pSocket, send_sequence, sequence_ack, pRevData );
+
+	if(recvbytes >= 8 )
+	{
+		// get sequence numbers
+		recv_sequence = pRevData->GetLong();
+		sequence_ack = pRevData->GetLong();
+
+		//Write decode data to file, for manual anais
+		packid++;
+		WriteDecodePack( pRevData->GetFullData(), recvbytes, packid );
+	}
+
+
 	}
 
 	return 1;
@@ -425,6 +505,8 @@ int ConnectToServer( char *pIP, int port = 27015)
 	{
 		LogPrintf( false, "Good connect to server: %s:%d\n", pIP, port);
 		StartCommunicationWithServer( pIP, port, pSocket, pChallenge);
+
+		return 0;
 	}
 	else if( pRecvBuff[0] == 0xFF && pRecvBuff[1] == 0xFF && pRecvBuff[2] == 0xFF && pRecvBuff[3] == 0xFF && pRecvBuff[4] == 0x39 )
 	{
@@ -887,9 +969,9 @@ int EmulationServer( int port )
 
 int main(int argc, char* argv[])
 {
-//	ConnectToServer( "127.0.0.1", 27015 );
+	ConnectToServer( "127.0.0.1", 27015 );
 
-	EmulationServer( 27015 );
+//	EmulationServer( 27015 );
 
 	return 1;
 }
